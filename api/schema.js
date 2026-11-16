@@ -1,6 +1,6 @@
 // Inspect a chosen database: auto-detect the date + image columns,
 // and report whether the Feed Order / Approval / Client Comments columns exist yet
-const { decrypt, notion, readJson, sendError } = require("./_utils");
+const { decrypt, notion, readJson, sendError, plainText } = require("./_utils");
 
 module.exports = async (req, res) => {
   try {
@@ -29,6 +29,9 @@ module.exports = async (req, res) => {
       fileProps[0] || "";
 
     res.status(200).json({
+      id: info.id,
+      title: plainText(info.title) || "Untitled database",
+      url: info.url || "",
       dateProps,
       fileProps,
       guessDate,
@@ -43,3 +46,4 @@ module.exports = async (req, res) => {
     sendError(res, e);
   }
 };
+

@@ -72,10 +72,19 @@
 
   <!-- STEP 2: choose database + columns -->
   <div class="card hidden" id="step2">
+    <button class="linkish" id="backConnect" style="margin:0 0 18px">← Back to connection</button>
     <div class="step-label">Step 2 · Choose Your Content Calendar</div>
     <div class="status" id="wsname" style="margin:0 0 14px"></div>
-    <label for="dbSelect">Database</label>
+    <label for="dbSearch">Find your calendar or table</label>
+    <input type="text" id="dbSearch" placeholder="Search by database or parent page name" />
+    <label for="dbSelect">Source database</label>
     <select id="dbSelect"><option>Loading your databases…</option></select>
+    <button class="linkish" id="refreshDbs">Refresh list</button> · <button class="linkish" id="reconnect">Choose Notion pages again</button>
+    <p class="hint">Notion may show the original database name rather than the name of a linked table view. Select the source, then check its columns below.</p>
+    <label for="dbLink" style="margin-top:18px">Or paste the original database link</label>
+    <input type="text" id="dbLink" placeholder="https://www.notion.so/…" />
+    <button class="btn secondary" id="useLink">Use this database</button>
+    <p class="hint" id="selectedDb"></p>
     <div id="colPick" class="hidden">
       <label for="fileSelect">Image Column (the post visual)</label>
       <select id="fileSelect"></select>
@@ -91,9 +100,11 @@
 
   <!-- STEP 3: embed link -->
   <div class="card hidden" id="step3">
+    <button class="linkish" id="backCalendar" style="margin:0 0 18px">← Back to calendar settings</button>
     <div class="step-label">Step 3 · Put It In Notion</div>
     <p style="font-size:14px; margin-bottom:6px"><span class="ok">Your feed is ready.</span> Full link (drag-and-drop + approvals):</p>
     <div class="embedbox" id="embedUrl"></div>
+    <a class="btn secondary" id="previewLink" target="_blank" rel="noopener" style="margin-bottom:12px;text-decoration:none">Open feed preview</a>
     <button class="btn" id="copyBtn">Copy Link</button>
     <p style="font-size:14px; margin:18px 0 6px">View-only version (no buttons, just the feed):</p>
     <div class="embedbox" id="readonlyUrl"></div>
@@ -113,6 +124,10 @@
 const $ = (id) => document.getElementById(id);
 let session = "";
 let schema = null;
+let databases = [];
+let schemaRequest = 0;
+let selectedDatabase = "";
+let workspaceName = "";
 
 function show(step) {
   ["step1","step2","step3"].forEach((s,i)=> $(s).classList.toggle("hidden", i+1 !== step && !(step===3 && i===1)));
@@ -140,16 +155,15 @@ $("tokenBtn").onclick = async () => {
 
 async function startStep2(workspace) {
   show(2);
-  if (workspace) $("wsname").innerHTML = "Connected to <b>" + workspace + "</b> ✓";
+  workspaceName = workspace || workspaceName;
+  $("wsname").textContent = workspaceName ? "Connected to " + workspaceName + " ✓" : "Connected to Notion ✓";
+  $("s2status").textContent = "Loading calendars…";
+  $("s2status").className = "status";
   try {
     const data = await api("/api/databases", { s: session });
-    const sel = $("dbSelect");
-    sel.innerHTML = "<option value=''>— Choose a database —</option>";
-    for (const db of data.databases) {
-      const o = document.createElement("option");
-      o.value = db.id; o.textContent = (db.icon ? db.icon + " " : "") + db.title;
-      sel.appendChild(o);
-    }
+    databases = data.databases;
+    renderDatabases();
+    $("s2status").textContent = "";
     if (!data.databases.length) {
       $("s2status").textContent = "No databases found. In Notion, make sure the pages holding your calendar were shared with the connection.";
       $("s2status").className = "status err";
@@ -157,13 +171,22 @@ async function startStep2(workspace) {
   } catch (e) { $("s2status").textContent = e.message; $("s2status").className = "status err"; }
 }
 
-$("dbSelect").onchange = async () => {
-  const db = $("dbSelect").value;
+async function selectDatabase(db) {
+  const request = ++schemaRequest;
+  selectedDatabase = "";
+  $("selectedDb").textContent = "";
   $("colPick").classList.add("hidden");
   if (!db) return;
   $("s2status").textContent = "Reading the database…"; $("s2status").className = "status";
   try {
-    schema = await api("/api/schema", { s: session, db });
+    const result = await api("/api/schema", { s: session, db });
+    if (request !== schemaRequest) return;
+    schema = result;
+    selectedDatabase = schema.id;
+    $("selectedDb").textContent = "Selected: " + schema.title + " · " + schema.id.slice(-8);
+    if (schema.url && /^https:\/\/(www\.)?notion\.(so|site)\//.test(schema.url)) {
+      const link = document.createElement("a"); link.href = schema.url; link.target = "_blank"; link.rel = "noopener"; link.textContent = " — Check in Notion"; $("selectedDb").appendChild(link);
+    }
     const fillSel = (id, options, guess, emptyLabel) => {
       const sel = $(id); sel.innerHTML = "";
       if (!options.length) { sel.innerHTML = "<option value=''>" + emptyLabel + "</option>"; return; }
@@ -184,7 +207,33 @@ $("dbSelect").onchange = async () => {
       : "All the special columns already exist — nothing will be changed.";
     $("s2status").textContent = "";
     $("colPick").classList.remove("hidden");
-  } catch (e) { $("s2status").textContent = e.message; $("s2status").className = "status err"; }
+    $("prepareBtn").disabled = !schema.fileProps.length;
+  } catch (e) { if (request !== schemaRequest) return; $("s2status").textContent = e.message; $("s2status").className = "status err"; }
+}
+
+function renderDatabases() {
+  const value = $("dbSelect").value;
+  $("dbSelect").replaceChildren(new Option("— Choose a calendar / table —", ""));
+  const query = $("dbSearch").value.trim().toLowerCase();
+  for (const db of databases) {
+    const label = [db.title, db.parentTitle].filter(Boolean).join(" — ") + " · " + db.id.slice(-8);
+    if (!label.toLowerCase().includes(query) && db.id !== selectedDatabase) continue;
+    $("dbSelect").add(new Option((db.icon ? db.icon + " " : "") + label, db.id));
+  }
+  $("dbSelect").value = value;
+}
+$("dbSearch").oninput = renderDatabases;
+$("dbSelect").onchange = () => selectDatabase($("dbSelect").value);
+$("refreshDbs").onclick = () => startStep2(workspaceName);
+$("reconnect").onclick = () => { location.href = "/api/auth"; };
+$("backConnect").onclick = () => { ++schemaRequest; show(1); };
+$("backCalendar").onclick = () => show(2);
+$("useLink").onclick = () => {
+  let input = $("dbLink").value.trim();
+  try { const url = new URL(input); if (!/(^|\.)notion\.(so|site)$/.test(url.hostname)) throw new Error(); input = url.pathname; } catch { if (input.includes("://")) input = ""; }
+  const match = input.match(/([a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:$|\/)/i);
+  if (!match) { $("s2status").textContent = "Paste the source database link from Notion (not a page containing a linked view)."; return; }
+  selectDatabase(match[1]);
 };
 
 $("prepareBtn").onclick = async () => {
@@ -193,11 +242,12 @@ $("prepareBtn").onclick = async () => {
   try {
     const data = await api("/api/prepare", {
       s: session,
-      db: $("dbSelect").value,
+      db: selectedDatabase,
       dateProp: $("dateSelect").value || "",
       fileProp: $("fileSelect").value,
       title: $("titleInput").value.trim(),
     });
+    $("previewLink").href = data.embedUrl;
     $("embedUrl").textContent = data.embedUrl;
     $("readonlyUrl").textContent = data.readonlyUrl;
     show(3);
@@ -230,3 +280,4 @@ if (params.get("s")) {
 </script>
 </body>
 </html>
+
