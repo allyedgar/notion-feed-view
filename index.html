@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Feed View — Setup</title>
+<style>
+  :root {
+    --ink: #1c1b1a; --muted: #87827c; --line: #e8e4df; --bg: #faf8f5;
+    --accent: #1c1b1a; --green: #2e7d4f; --card: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink);
+    display: flex; justify-content: center; padding: 48px 20px;
+  }
+  .wrap { width: 100%; max-width: 560px; }
+  h1 { font-size: 26px; letter-spacing: -0.02em; margin-bottom: 6px; }
+  .sub { color: var(--muted); font-size: 15px; margin-bottom: 28px; line-height: 1.5; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 28px; margin-bottom: 16px;
+  }
+  .step-label { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+    background: var(--accent); color: #fff; border: none; border-radius: 10px;
+    padding: 13px 22px; font-size: 15px; font-weight: 600; width: 100%;
+    justify-content: center; transition: opacity .15s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn.secondary { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+  select, input[type=text], input[type=password] {
+    width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 15px; background: #fff; color: var(--ink); margin-bottom: 14px;
+  }
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .hint { font-size: 13px; color: var(--muted); line-height: 1.5; margin-top: 10px; }
+  .hidden { display: none !important; }
+  .ok { color: var(--green); font-weight: 600; }
+  .linkish { background: none; border: none; color: var(--muted); font-size: 13px; text-decoration: underline; cursor: pointer; padding: 0; margin-top: 14px; }
+  .embedbox {
+    background: #f4f1ec; border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px;
+    word-break: break-all; margin: 10px 0 14px; max-height: 110px; overflow: auto;
+  }
+  .status { font-size: 14px; margin-top: 12px; color: var(--muted); }
+  .err { color: #b3402a; }
+  ol.howto { padding-left: 20px; font-size: 14px; line-height: 1.8; color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Instagram Feed View for Notion</h1>
+  <p class="sub">Turn your Notion content calendar into a live, drag-and-drop Instagram-style feed your clients can approve — right inside Notion.</p>
+
+  <!-- STEP 1: connect -->
+  <div class="card" id="step1">
+    <div class="step-label">Step 1 · Connect</div>
+    <button class="btn" id="connectBtn">Connect To Notion</button>
+    <div class="hint">You'll see Notion's own permission screen — just choose the pages that hold your content calendar.</div>
+    <button class="linkish" id="tokenToggle">Use An Integration Token Instead</button>
+    <div id="tokenForm" class="hidden" style="margin-top:14px">
+      <label for="tokenInput">Internal Integration Token</label>
+      <input type="password" id="tokenInput" placeholder="ntn_… or secret_…" />
+      <button class="btn secondary" id="tokenBtn">Continue</button>
+    </div>
+    <div class="status" id="s1status"></div>
+  </div>
+
+  <!-- STEP 2: choose database + columns -->
+  <div class="card hidden" id="step2">
+    <div class="step-label">Step 2 · Choose Your Content Calendar</div>
+    <div class="status" id="wsname" style="margin:0 0 14px"></div>
+    <label for="dbSelect">Database</label>
+    <select id="dbSelect"><option>Loading your databases…</option></select>
+    <div id="colPick" class="hidden">
+      <label for="fileSelect">Image Column (the post visual)</label>
+      <select id="fileSelect"></select>
+      <label for="dateSelect">Date Column (post date)</label>
+      <select id="dateSelect"></select>
+      <label for="titleInput">Feed Title Shown At The Top (optional)</label>
+      <input type="text" id="titleInput" placeholder="e.g. @cornerstonekitchen" />
+      <button class="btn" id="prepareBtn">Create My Feed</button>
+      <div class="hint" id="prepNote"></div>
+    </div>
+    <div class="status" id="s2status"></div>
+  </div>
+
+  <!-- STEP 3: embed link -->
+  <div class="card hidden" id="step3">
+    <div class="step-label">Step 3 · Put It In Notion</div>
+    <p style="font-size:14px; margin-bottom:6px"><span class="ok">Your feed is ready.</span> Full link (drag-and-drop + approvals):</p>
+    <div class="embedbox" id="embedUrl"></div>
+    <button class="btn" id="copyBtn">Copy Link</button>
+    <p style="font-size:14px; margin:18px 0 6px">View-only version (no buttons, just the feed):</p>
+    <div class="embedbox" id="readonlyUrl"></div>
+    <button class="btn secondary" id="copyRoBtn">Copy View-Only Link</button>
+    <div style="margin-top:22px">
+      <div class="step-label">In Notion</div>
+      <ol class="howto">
+        <li>Paste the link into any Notion page</li>
+        <li>Choose <b>Create embed</b> from the menu that appears</li>
+        <li>Drag the corners to make it bigger — done</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let session = "";
+let schema = null;
+
+function show(step) {
+  ["step1","step2","step3"].forEach((s,i)=> $(s).classList.toggle("hidden", i+1 !== step && !(step===3 && i===1)));
+  if (step === 3) { $("step1").classList.add("hidden"); $("step2").classList.add("hidden"); $("step3").classList.remove("hidden"); }
+}
+
+async function api(path, body) {
+  const res = await fetch(path, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(body) });
+  const data = await res.json().catch(()=> ({}));
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
+}
+
+$("connectBtn").onclick = () => { window.location.href = "/api/auth"; };
+
+$("tokenToggle").onclick = () => $("tokenForm").classList.toggle("hidden");
+$("tokenBtn").onclick = async () => {
+  $("s1status").textContent = "Checking token…"; $("s1status").className = "status";
+  try {
+    const data = await api("/api/session", { token: $("tokenInput").value });
+    session = data.s;
+    startStep2(data.workspace);
+  } catch (e) { $("s1status").textContent = e.message; $("s1status").className = "status err"; }
+};
+
+async function startStep2(workspace) {
+  show(2);
+  if (workspace) $("wsname").innerHTML = "Connected to <b>" + workspace + "</b> ✓";
+  try {
+    const data = await api("/api/databases", { s: session });
+    const sel = $("dbSelect");
+    sel.innerHTML = "<option value=''>— Choose a database —</option>";
+    for (const db of data.databases) {
+      const o = document.createElement("option");
+      o.value = db.id; o.textContent = (db.icon ? db.icon + " " : "") + db.title;
+      sel.appendChild(o);
+    }
+    if (!data.databases.length) {
+      $("s2status").textContent = "No databases found. In Notion, make sure the pages holding your calendar were shared with the connection.";
+      $("s2status").className = "status err";
+    }
+  } catch (e) { $("s2status").textContent = e.message; $("s2status").className = "status err"; }
+}
+
+$("dbSelect").onchange = async () => {
+  const db = $("dbSelect").value;
+  $("colPick").classList.add("hidden");
+  if (!db) return;
+  $("s2status").textContent = "Reading the database…"; $("s2status").className = "status";
+  try {
+    schema = await api("/api/schema", { s: session, db });
+    const fillSel = (id, options, guess, emptyLabel) => {
+      const sel = $(id); sel.innerHTML = "";
+      if (!options.length) { sel.innerHTML = "<option value=''>" + emptyLabel + "</option>"; return; }
+      for (const n of options) {
+        const o = document.createElement("option");
+        o.value = n; o.textContent = n; if (n === guess) o.selected = true;
+        sel.appendChild(o);
+      }
+    };
+    fillSel("fileSelect", schema.fileProps, schema.guessFile, "No image/files column found in this database");
+    fillSel("dateSelect", schema.dateProps, schema.guessDate, "No date column (feed will use manual order only)");
+    const missing = [];
+    if (!schema.has.feedOrder) missing.push("Feed Order");
+    if (!schema.has.approval) missing.push("Approval");
+    if (!schema.has.clientComments) missing.push("Client Comments");
+    $("prepNote").textContent = missing.length
+      ? "I'll add these columns to the database for you: " + missing.join(", ") + "."
+      : "All the special columns already exist — nothing will be changed.";
+    $("s2status").textContent = "";
+    $("colPick").classList.remove("hidden");
+  } catch (e) { $("s2status").textContent = e.message; $("s2status").className = "status err"; }
+};
+
+$("prepareBtn").onclick = async () => {
+  $("prepareBtn").disabled = true;
+  $("s2status").textContent = "Setting things up…"; $("s2status").className = "status";
+  try {
+    const data = await api("/api/prepare", {
+      s: session,
+      db: $("dbSelect").value,
+      dateProp: $("dateSelect").value || "",
+      fileProp: $("fileSelect").value,
+      title: $("titleInput").value.trim(),
+    });
+    $("embedUrl").textContent = data.embedUrl;
+    $("readonlyUrl").textContent = data.readonlyUrl;
+    show(3);
+  } catch (e) {
+    $("s2status").textContent = e.message; $("s2status").className = "status err";
+  }
+  $("prepareBtn").disabled = false;
+};
+
+function copy(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent; btn.textContent = "Copied ✓";
+    setTimeout(() => (btn.textContent = old), 1600);
+  });
+}
+$("copyBtn").onclick = () => copy($("embedUrl").textContent, $("copyBtn"));
+$("copyRoBtn").onclick = () => copy($("readonlyUrl").textContent, $("copyRoBtn"));
+
+// Returning from Notion OAuth
+const params = new URLSearchParams(window.location.search);
+if (params.get("s")) {
+  session = params.get("s");
+  history.replaceState({}, "", "/"); // keep the session out of the address bar
+  startStep2("");
+  $("wsname").innerHTML = "Connected to Notion ✓";
+} else if (params.get("error")) {
+  $("s1status").textContent = "Notion said: " + params.get("error") + " — try again.";
+  $("s1status").className = "status err";
+}
+</script>
+</body>
+</html>
