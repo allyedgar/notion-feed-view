@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Feed View</title>
+<style>
+  :root {
+    --ink:#1c1b1a; --muted:#8e8880; --line:#e8e4df; --bg:#ffffff;
+    --green:#2e7d4f; --green-bg:#e7f3ec; --amber:#9a6b00; --amber-bg:#fdf3dd;
+  }
+  * { box-sizing:border-box; margin:0; -webkit-tap-highlight-color:transparent; }
+  html,body { background:var(--bg); }
+  body { font-family:-apple-system,"Segoe UI",Helvetica,Arial,sans-serif; color:var(--ink); }
+
+  .header { display:flex; align-items:center; gap:12px; padding:14px 16px 12px; }
+  .avatar {
+    width:44px; height:44px; border-radius:50%; flex:none;
+    background:conic-gradient(from 210deg,#f9ce34,#ee2a7b,#6228d7,#f9ce34);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .avatar span {
+    width:38px; height:38px; border-radius:50%; background:#fff;
+    display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .title { font-weight:700; font-size:15px; }
+  .count { font-size:13px; color:var(--muted); }
+
+  .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:2px; }
+  .tile {
+    position:relative; aspect-ratio:1/1; overflow:hidden; cursor:pointer;
+    background:#f2efea; touch-action:pan-y; user-select:none; -webkit-user-select:none;
+  }
+  .tile img { width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+  .tile.dragging-src { opacity:.25; }
+  .tile .badge {
+    position:absolute; top:6px; right:6px; font-size:11px; font-weight:700;
+    padding:3px 7px; border-radius:99px; backdrop-filter:blur(3px);
+  }
+  .badge.approved { background:var(--green-bg); color:var(--green); }
+  .badge.changes { background:var(--amber-bg); color:var(--amber); }
+  .tile .datechip {
+    position:absolute; left:6px; bottom:6px; font-size:10px; font-weight:600;
+    background:rgba(0,0,0,.55); color:#fff; padding:2px 6px; border-radius:6px;
+  }
+
+  .ghost {
+    position:fixed; z-index:50; width:110px; height:110px; border-radius:10px;
+    overflow:hidden; pointer-events:none; box-shadow:0 10px 30px rgba(0,0,0,.35);
+    transform:translate(-50%,-50%) rotate(2deg);
+  }
+  .ghost img { width:100%; height:100%; object-fit:cover; }
+
+  .savebar {
+    position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    background:var(--ink); color:#fff; border-radius:12px; padding:10px 12px;
+    display:flex; gap:10px; align-items:center; font-size:13px; z-index:60;
+    box-shadow:0 8px 24px rgba(0,0,0,.25);
+  }
+  .savebar button {
+    border:none; border-radius:8px; padding:7px 14px; font-size:13px; font-weight:700; cursor:pointer;
+  }
+  .savebar .save { background:#fff; color:var(--ink); }
+  .savebar .undo { background:transparent; color:#cfcac3; }
+
+  .overlay {
+    position:fixed; inset:0; background:rgba(20,18,16,.6); z-index:70;
+    display:flex; align-items:center; justify-content:center; padding:18px;
+  }
+  .modal {
+    background:#fff; border-radius:16px; width:100%; max-width:420px;
+    max-height:92vh; overflow:auto;
+  }
+  .modal img { width:100%; aspect-ratio:1/1; object-fit:cover; display:block; border-radius:16px 16px 0 0; }
+  .modal .body { padding:16px 18px 18px; }
+  .modal .cap { font-size:15px; font-weight:600; line-height:1.4; }
+  .modal .meta { font-size:13px; color:var(--muted); margin-top:4px; }
+  .modal .pill { display:inline-block; font-size:12px; font-weight:700; padding:4px 10px; border-radius:99px; margin-top:10px; }
+  .pill.approved { background:var(--green-bg); color:var(--green); }
+  .pill.changes { background:var(--amber-bg); color:var(--amber); }
+  .actions { display:flex; gap:10px; margin-top:16px; }
+  .abtn {
+    flex:1; border-radius:10px; padding:13px 10px; font-size:14px; font-weight:700; cursor:pointer; border:none;
+  }
+  .abtn.approve { background:var(--green); color:#fff; }
+  .abtn.change { background:#fff; color:var(--ink); border:1.5px solid var(--line); }
+  .changebox { margin-top:14px; }
+  .changebox textarea {
+    width:100%; min-height:88px; border:1.5px solid var(--line); border-radius:10px;
+    padding:12px; font-size:14px; font-family:inherit; resize:vertical;
+  }
+  .changebox .send { margin-top:10px; width:100%; border:none; border-radius:10px; padding:13px; font-size:14px; font-weight:700; background:var(--ink); color:#fff; cursor:pointer; }
+  .prev { margin-top:14px; background:#faf8f5; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:12.5px; color:var(--muted); white-space:pre-wrap; }
+  .close { position:sticky; top:0; float:right; margin:10px; width:32px; height:32px; border-radius:50%; border:none; background:rgba(0,0,0,.5); color:#fff; font-size:16px; cursor:pointer; z-index:2; }
+  .center { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
+  .toast {
+    position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
+    background:var(--green); color:#fff; font-size:13px; font-weight:600;
+    padding:10px 18px; border-radius:99px; z-index:80;
+  }
+</style>
+</head>
+<body>
+<div id="app"><div class="center">Loading your feed…</div></div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const CONF = params.get("c");
+const TITLE = params.get("title") || "";
+const READONLY = params.get("readonly") === "1";
+const SHOW_DATES = params.get("dates") !== "0";
+
+let items = [];
+let savedOrder = [];
+let dirty = false;
+
+const app = document.getElementById("app");
+const monthsShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(iso){ if(!iso) return ""; const d = new Date(iso); return d.getDate() + " " + monthsShort[d.getMonth()]; }
+function fmtDateLong(iso){ if(!iso) return ""; const d = new Date(iso); return d.getDate() + " " + monthsShort[d.getMonth()] + " " + d.getFullYear(); }
+
+async function load() {
+  if (!CONF) { app.innerHTML = '<div class="center">This embed link is missing its configuration.</div>'; return; }
+  try {
+    const res = await fetch("/api/feed?c=" + encodeURIComponent(CONF));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Couldn't load the feed");
+    items = data.items;
+    savedOrder = items.map(i => i.id);
+    render();
+  } catch (e) {
+    app.innerHTML = '<div class="center">' + escapeHtml(e.message) + "</div>";
+  }
+}
+
+function escapeHtml(s){ const d=document.createElement("div"); d.textContent=s||""; return d.innerHTML; }
+
+function render() {
+  let html = "";
+  if (TITLE) {
+    html += '<div class="header"><div class="avatar"><span>📸</span></div><div>' +
+      '<div class="title">' + escapeHtml(TITLE) + '</div>' +
+      '<div class="count">' + items.length + ' planned posts</div></div></div>';
+  }
+  html += '<div class="grid" id="grid">';
+  for (const it of items) {
+    const badge = it.approval === "Approved"
+      ? '<span class="badge approved">✓</span>'
+      : it.approval === "Change Requested"
+        ? '<span class="badge changes">✎</span>' : "";
+    const chip = SHOW_DATES && it.date ? '<div class="datechip">' + fmtDate(it.date) + '</div>' : "";
+    html += '<div class="tile" data-id="' + it.id + '"><img src="' + escapeHtml(it.img) + '" loading="lazy" alt="">' + badge + chip + '</div>';
+  }
+  html += "</div>";
+  if (!items.length) html = '<div class="center">No posts with images yet — add an image to a row in your content calendar and refresh.</div>';
+  app.innerHTML = html;
+  attachTileEvents();
+}
+
+/* ---------- open post / approval modal ---------- */
+function openModal(id) {
+  const it = items.find(x => x.id === id);
+  if (!it) return;
+  const pill = it.approval === "Approved"
+    ? '<span class="pill approved">Approved ✓</span>'
+    : it.approval === "Change Requested"
+      ? '<span class="pill changes">Change Requested</span>' : "";
+  const prev = it.comments ? '<div class="prev"><b>Previous Comments</b>' + "\n" + escapeHtml(it.comments) + "</div>" : "";
+  const actions = READONLY ? "" :
+    '<div class="actions">' +
+      '<button class="abtn approve" id="approveBtn">Approve Post</button>' +
+      '<button class="abtn change" id="changeBtn">Make A Change</button>' +
+    '</div>' +
+    '<div class="changebox" id="changeBox" style="display:none">' +
+      '<textarea id="changeText" placeholder="Tell us what you' + "’" + 'd like changed…"></textarea>' +
+      '<button class="send" id="sendBtn">Send Change Request</button>' +
+    '</div>';
+
+  const ov = document.createElement("div");
+  ov.className = "overlay";
+  ov.innerHTML =
+    '<div class="modal">' +
+      '<button class="close">✕</button>' +
+      '<img src="' + escapeHtml(it.img) + '" alt="">' +
+      '<div class="body">' +
+        (it.caption ? '<div class="cap">' + escapeHtml(it.caption) + "</div>" : "") +
+        (it.date ? '<div class="meta">Scheduled for ' + fmtDateLong(it.date) + "</div>" : "") +
+        pill + actions + prev +
+      "</div></div>";
+  document.body.appendChild(ov);
+
+  const closeAll = () => ov.remove();
+  ov.addEventListener("click", (e) => { if (e.target === ov) closeAll(); });
+  ov.querySelector(".close").onclick = closeAll;
+
+  if (READONLY) return;
+  ov.querySelector("#approveBtn").onclick = async () => {
+    await sendFeedback(it, "approve", "");
+    closeAll(); toast("Post approved ✓");
+  };
+  ov.querySelector("#changeBtn").onclick = () => {
+    const box = ov.querySelector("#changeBox");
+    box.style.display = box.style.display === "none" ? "block" : "none";
+    ov.querySelector("#changeText").focus();
+  };
+  ov.querySelector("#sendBtn").onclick = async () => {
+    const txt = ov.querySelector("#changeText").value.trim();
+    if (!txt) { ov.querySelector("#changeText").focus(); return; }
+    ov.querySelector("#sendBtn").textContent = "Sending…";
+    await sendFeedback(it, "change", txt);
+    closeAll(); toast("Change request sent ✓");
+  };
+}
+
+async function sendFeedback(it, action, comment) {
+  try {
+    const res = await fetch("/api/feedback", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ c: CONF, pageId: it.id, action, comment }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || "Couldn't save");
+    it.approval = action === "approve" ? "Approved" : "Change Requested";
+    if (comment) it.comments = (it.comments ? it.comments + "\n" : "") + comment;
+    render();
+  } catch (e) { toast(e.message, true); }
+}
+
+function toast(msg, isErr) {
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  if (isErr) t.style.background = "#b3402a";
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2400);
+}
+
+/* ---------- drag to reorder (hold, then drag) ---------- */
+let drag = null;
+
+function attachTileEvents() {
+  const grid = document.getElementById("grid");
+  if (!grid) return;
+  grid.querySelectorAll(".tile").forEach((tile) => {
+    tile.addEventListener("pointerdown", (e) => onDown(e, tile));
+  });
+}
+
+function onDown(e, tile) {
+  if (READONLY) { tile.onclick = () => openModal(tile.dataset.id); return; }
+  const startX = e.clientX, startY = e.clientY;
+  let activated = false, cancelled = false;
+
+  const timer = setTimeout(() => { if (!cancelled) activate(); }, 220);
+
+  const activate = () => {
+    activated = true;
+    tile.setPointerCapture(e.pointerId);
+    tile.classList.add("dragging-src");
+    const ghost = document.createElement("div");
+    ghost.className = "ghost";
+    ghost.innerHTML = '<img src="' + tile.querySelector("img").src + '">';
+    document.body.appendChild(ghost);
+    drag = { id: tile.dataset.id, ghost, tile };
+    moveGhost(startX, startY);
+  };
+
+  const moveGhost = (x, y) => {
+    drag.ghost.style.left = x + "px";
+    drag.ghost.style.top = y + "px";
+    const target = document.elementsFromPoint(x, y).find(el => el.classList && el.classList.contains("tile") && el !== drag.tile);
+    if (target) {
+      const ids = items.map(i => i.id);
+      const from = ids.indexOf(drag.id);
+      const to = ids.indexOf(target.dataset.id);
+      if (from !== -1 && to !== -1 && from !== to) {
+        const [moved] = items.splice(from, 1);
+        items.splice(to, 0, moved);
+        rerenderGridKeepDrag();
+      }
+    }
+  };
+
+  const onMove = (ev) => {
+    if (!activated) {
+      if (Math.abs(ev.clientX - startX) > 8 || Math.abs(ev.clientY - startY) > 8) {
+        cancelled = true; clearTimeout(timer); cleanup(); // user is scrolling
+      }
+      return;
+    }
+    ev.preventDefault();
+    moveGhost(ev.clientX, ev.clientY);
+  };
+
+  const onUp = () => {
+    clearTimeout(timer);
+    if (activated) {
+      finishDrag();
+    } else if (!cancelled) {
+      openModal(tile.dataset.id); // it was a tap
+    }
+    cleanup();
+  };
+
+  const cleanup = () => {
+    tile.removeEventListener("pointermove", onMove);
+    tile.removeEventListener("pointerup", onUp);
+    tile.removeEventListener("pointercancel", onUp);
+  };
+
+  tile.addEventListener("pointermove", onMove);
+  tile.addEventListener("pointerup", onUp);
+  tile.addEventListener("pointercancel", onUp);
+}
+
+function rerenderGridKeepDrag() {
+  const grid = document.getElementById("grid");
+  const byId = {};
+  grid.querySelectorAll(".tile").forEach(t => byId[t.dataset.id] = t);
+  for (const it of items) if (byId[it.id]) grid.appendChild(byId[it.id]);
+}
+
+function finishDrag() {
+  if (drag) { drag.ghost.remove(); drag.tile.classList.remove("dragging-src"); drag = null; }
+  const now = items.map(i => i.id);
+  dirty = JSON.stringify(now) !== JSON.stringify(savedOrder);
+  showSaveBar();
+}
+
+function showSaveBar() {
+  const old = document.getElementById("savebar");
+  if (old) old.remove();
+  if (!dirty) return;
+  const bar = document.createElement("div");
+  bar.className = "savebar"; bar.id = "savebar";
+  bar.innerHTML = 'Order changed <button class="save">Save Order</button><button class="undo">Undo</button>';
+  document.body.appendChild(bar);
+  bar.querySelector(".save").onclick = async () => {
+    bar.querySelector(".save").textContent = "Saving…";
+    try {
+      const res = await fetch("/api/reorder", {
+        method: "POST", headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ c: CONF, order: items.map(i => i.id) }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || "Couldn't save the order");
+      savedOrder = items.map(i => i.id); dirty = false;
+      bar.remove(); toast("Order saved to Notion ✓");
+    } catch (e) { bar.remove(); toast(e.message, true); }
+  };
+  bar.querySelector(".undo").onclick = () => {
+    items.sort((a, b) => savedOrder.indexOf(a.id) - savedOrder.indexOf(b.id));
+    dirty = false; bar.remove(); render();
+  };
+}
+
+load();
+</script>
+</body>
+</html>
