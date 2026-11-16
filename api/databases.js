@@ -9,7 +9,8 @@ module.exports = async (req, res) => {
 
     const results = [];
     let cursor = undefined;
-    for (let i = 0; i < 5; i++) {
+    let pages = 0;
+    do {
       const page = await notion(t, "POST", "/search", {
         filter: { property: "object", value: "database" },
         page_size: 100,
@@ -18,10 +19,23 @@ module.exports = async (req, res) => {
       results.push(...page.results);
       if (!page.has_more) break;
       cursor = page.next_cursor;
-    }
+      if (++pages >= 100) throw new Error("Too many databases to list. Paste the exact database link instead.");
+    } while (cursor);
 
+    const parents = new Map();
+    for (const db of results) {
+      const id = db.parent && db.parent.page_id;
+      if (!id || parents.has(id)) continue;
+      try {
+        const page = await notion(t, "GET", "/pages/" + id);
+        const title = Object.values(page.properties || {}).find(p => p.type === "title");
+        parents.set(id, title ? plainText(title.title) : "");
+      } catch { parents.set(id, ""); }
+    }
     const databases = results.map((db) => ({
       id: db.id,
+      parentTitle: parents.get(db.parent && db.parent.page_id) || "",
+      url: db.url || "",
       title: plainText(db.title) || "Untitled database",
       icon: db.icon && db.icon.type === "emoji" ? db.icon.emoji : "",
     }));
@@ -31,3 +45,4 @@ module.exports = async (req, res) => {
     sendError(res, e);
   }
 };
+

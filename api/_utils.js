@@ -77,9 +77,10 @@ function sendError(res, e) {
 
 // Pull plain text out of a Notion rich_text / title array
 function plainText(arr) {
-  return (arr || []).map((t) => t.plain_text || "").join("");
+  return (arr || []).map((t) => t.plain_text || (t.text && t.text.content) || "").join("");
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 module.exports = { encrypt, decrypt, notion, baseUrl, readJson, sendError, plainText, sleep, NOTION_VERSION };
+

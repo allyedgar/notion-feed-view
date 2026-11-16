@@ -98,6 +98,32 @@
     background:var(--green); color:#fff; font-size:13px; font-weight:600;
     padding:10px 18px; border-radius:99px; z-index:80;
   }
+
+  :root { --ink:#262626; --muted:#737373; --line:#dbdbdb; }
+  body { max-width:935px; margin:auto; padding-bottom:32px; }
+  .profile-nav { display:flex; justify-content:space-between; align-items:center; padding:18px 24px; border-bottom:1px solid #efefef; }
+  .wordmark { font-size:25px; font-weight:700; letter-spacing:-1px; font-family:Georgia,serif; font-style:italic; }
+  .profile-nav span:last-child { font-size:12px; color:var(--muted); }
+  .header { gap:38px; padding:32px 36px 20px; }
+  .avatar { width:100px; height:100px; padding:4px; }
+  .avatar span { width:92px; height:92px; border:4px solid white; background:#f5f5f5; font-size:30px; font-weight:600; }
+  .title { font-size:22px; font-weight:500; letter-spacing:-.4px; }
+  .count { margin-top:15px; color:var(--ink); font-size:14px; }
+  .bio { font-size:14px; margin-top:12px; line-height:1.6; }
+  .profile-actions { display:flex; gap:8px; margin:0 36px 24px; }
+  .profile-actions button { flex:1; border:0; border-radius:8px; background:#efefef; padding:9px; font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+  .grid-tabs { border-top:1px solid var(--line); display:flex; justify-content:center; margin:0 0 2px; }
+  .grid-tabs span { border-top:1px solid var(--ink); margin-top:-1px; padding:16px 28px; font-size:12px; font-weight:600; letter-spacing:1px; }
+  .grid { gap:3px; }
+  .tile { aspect-ratio:3/4; background:#fafafa; }
+  .modal { border-radius:4px; max-width:460px; }
+  .modal img { border-radius:0; aspect-ratio:3/4; }
+  .modal-profile { padding:14px 18px; font-size:14px; font-weight:600; border-bottom:1px solid #efefef; }
+  .modal .cap { font-weight:400; }
+  .post-icons { display:flex; gap:16px; padding-bottom:14px; font-size:25px; }
+  .modal .body { padding-top:14px; }
+  .empty-feed { padding:36px 20px; text-align:center; color:var(--muted); }
+  @media(max-width:500px) { .header { gap:22px; padding:22px 16px; } .avatar { width:78px; height:78px; } .avatar span { width:70px;height:70px;font-size:24px; } .title {font-size:19px;} .profile-actions { margin:0 16px 20px; } .profile-nav {padding:14px 16px;} }
 </style>
 </head>
 <body>
@@ -136,12 +162,14 @@ async function load() {
 function escapeHtml(s){ const d=document.createElement("div"); d.textContent=s||""; return d.innerHTML; }
 
 function render() {
-  let html = "";
-  if (TITLE) {
-    html += '<div class="header"><div class="avatar"><span>📸</span></div><div>' +
-      '<div class="title">' + escapeHtml(TITLE) + '</div>' +
-      '<div class="count">' + items.length + ' planned posts</div></div></div>';
-  }
+  const name = TITLE || "Your content calendar";
+  let html = '<div class="profile-nav"><span class="wordmark">Feed View</span><span>Instagram preview</span></div>' +
+    '<div class="header"><div class="avatar"><span>' + escapeHtml(name.replace(/^@/, "").slice(0, 1).toUpperCase()) + '</span></div><div>' +
+    '<div class="title">' + escapeHtml(name) + '</div>' +
+    '<div class="count"><b>' + items.length + '</b> planned posts</div>' +
+    '<div class="bio">Your upcoming feed, all in one place.<br>' + (READONLY ? 'Tap a post to preview.' : 'Tap to review · Hold and drag to rearrange.') + '</div></div></div>' +
+    '<div class="profile-actions"><button id="refreshFeed">Refresh feed</button></div>' +
+    '<div class="grid-tabs"><span>▦ &nbsp; POSTS</span></div>';
   html += '<div class="grid" id="grid">';
   for (const it of items) {
     const badge = it.approval === "Approved"
@@ -152,8 +180,9 @@ function render() {
     html += '<div class="tile" data-id="' + it.id + '"><img src="' + escapeHtml(it.img) + '" loading="lazy" alt="">' + badge + chip + '</div>';
   }
   html += "</div>";
-  if (!items.length) html = '<div class="center">No posts with images yet — add an image to a row in your content calendar and refresh.</div>';
+  if (!items.length) html += '<div class="center">No posts with images yet — add an image to a row in your content calendar and refresh.</div>';
   app.innerHTML = html;
+  document.getElementById("refreshFeed").onclick = () => { if (!dirty || confirm("Discard your unsaved order and refresh?")) load(); };
   attachTileEvents();
 }
 
@@ -180,9 +209,10 @@ function openModal(id) {
   ov.className = "overlay";
   ov.innerHTML =
     '<div class="modal">' +
-      '<button class="close">✕</button>' +
+      '<button class="close" aria-label="Back to feed">✕</button>' +
+      '<div class="modal-profile">' + escapeHtml(TITLE || 'Your content calendar') + '</div>' +
       '<img src="' + escapeHtml(it.img) + '" alt="">' +
-      '<div class="body">' +
+      '<div class="body"><div class="post-icons" aria-hidden="true">♡ &nbsp; ◯ &nbsp; ➤</div>' +
         (it.caption ? '<div class="cap">' + escapeHtml(it.caption) + "</div>" : "") +
         (it.date ? '<div class="meta">Scheduled for ' + fmtDateLong(it.date) + "</div>" : "") +
         pill + actions + prev +
@@ -195,7 +225,7 @@ function openModal(id) {
 
   if (READONLY) return;
   ov.querySelector("#approveBtn").onclick = async () => {
-    await sendFeedback(it, "approve", "");
+    if (!await sendFeedback(it, "approve", "")) return;
     closeAll(); toast("Post approved ✓");
   };
   ov.querySelector("#changeBtn").onclick = () => {
@@ -207,7 +237,7 @@ function openModal(id) {
     const txt = ov.querySelector("#changeText").value.trim();
     if (!txt) { ov.querySelector("#changeText").focus(); return; }
     ov.querySelector("#sendBtn").textContent = "Sending…";
-    await sendFeedback(it, "change", txt);
+    if (!await sendFeedback(it, "change", txt)) { ov.querySelector("#sendBtn").textContent = "Send Change Request"; return; }
     closeAll(); toast("Change request sent ✓");
   };
 }
@@ -222,7 +252,8 @@ async function sendFeedback(it, action, comment) {
     it.approval = action === "approve" ? "Approved" : "Change Requested";
     if (comment) it.comments = (it.comments ? it.comments + "\n" : "") + comment;
     render();
-  } catch (e) { toast(e.message, true); }
+    return true;
+  } catch (e) { toast(e.message, true); return false; }
 }
 
 function toast(msg, isErr) {
@@ -355,3 +386,4 @@ load();
 </script>
 </body>
 </html>
+
